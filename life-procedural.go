@@ -1,25 +1,32 @@
 package main
 
 import (
+	"bufio"
+	"flag"
 	"fmt"
 	"math/rand"
+	"os"
 	"os/exec"
 	"strconv"
 	"time"
 )
 
 // Global settings
-const initCellCount = 250
-const refreshRate = 8
-const rows = 30
-const cols = 80
+const MAX = 200
 
-const ageColor = true
-const ageShape = true
+var refreshRate = flag.Int("r", 8, "refresh rate per sec")
+var initCellCount = flag.Int("i", 100, "initial number of alive cells")
+
+var ageShape = flag.Bool("shape", true, "use shapes to denote cell age")
+var ageColor = flag.Bool("color", true, "use color to denote cell age")
+
+var rows = flag.Int("rows", 23, "number of rows in universe")
+var cols = flag.Int("cols", 78, "number of columns in universe")
 
 var generation = 0
+var alive = 0
 
-var board [rows][cols]int // value represents age of a cell
+var board [MAX][MAX]int // value represents age of a cell
 
 func cls() {
 	out, _ := exec.Command("tput", "clear").Output()
@@ -27,9 +34,9 @@ func cls() {
 }
 
 func pos(r, c int) {
-	out, _ := exec.Command("tput", "cup",
-		strconv.Itoa(r), strconv.Itoa(c)).Output()
-	fmt.Printf("%s", out)
+	// out, _ := exec.Command("tput", "cup",
+	// 	strconv.Itoa(r), strconv.Itoa(c)).Output()
+	fmt.Printf("\033[" + strconv.Itoa(r) + ";" + strconv.Itoa(c) + "H")
 }
 
 func cell(age int) string {
@@ -39,7 +46,7 @@ func cell(age int) string {
 	}
 
 	shape := "*"
-	if ageShape {
+	if *ageShape {
 		switch age {
 		case 1:
 			shape = "."
@@ -52,7 +59,7 @@ func cell(age int) string {
 		}
 	}
 
-	if ageColor {
+	if *ageColor {
 		switch age {
 		case 1:
 			return "\033[1;32m" + shape + "\033[0m"
@@ -73,32 +80,33 @@ func cell(age int) string {
 func draw() {
 	pos(0, 0)
 
-	fmt.Printf("Conway's Life in Go | board %dx%d;", rows, cols)
-	fmt.Printf(" rate %d/sec; gen = %d\n", refreshRate, generation)
+	fmt.Printf("Conway's Life in Go | board %dx%d;", *rows, *cols)
+	fmt.Printf(" rate %d/sec; alive = %2d; gen = %d   \n",
+		*refreshRate, alive, generation)
 	fmt.Print("+")
-	for i := 0; i < cols; i++ {
+	for i := 0; i < *cols; i++ {
 		fmt.Print("-")
 	}
 	fmt.Println("+")
 
-	for row := 0; row < rows; row++ {
+	for row := 0; row < *rows; row++ {
 		fmt.Print("|")
-		for col := 0; col < cols; col++ {
+		for col := 0; col < *cols; col++ {
 			fmt.Print(cell(board[row][col]))
 		}
 		fmt.Println("|")
 	}
 
 	fmt.Print("+")
-	for i := 0; i < cols; i++ {
+	for i := 0; i < *cols; i++ {
 		fmt.Print("-")
 	}
 	fmt.Println("+")
 }
 
-func copyBoard(b [rows][cols]int) {
-	for r := 0; r < rows; r++ {
-		for c := 0; c < cols; c++ {
+func copyBoard(b [MAX][MAX]int) {
+	for r := 0; r < *rows; r++ {
+		for c := 0; c < *cols; c++ {
 			board[r][c] = b[r][c]
 		}
 	}
@@ -112,35 +120,37 @@ func neighbours(r, c int) int {
 	if r > 0 && c > 0 && board[r-1][c-1] > 0 {
 		count++
 	}
-	if r > 0 && c < cols-1 && board[r-1][c+1] > 0 {
+	if r > 0 && c < *cols-1 && board[r-1][c+1] > 0 {
 		count++
 	}
 	if c > 0 && board[r][c-1] > 0 {
 		count++
 	}
-	if c < cols-1 && board[r][c+1] > 0 {
+	if c < *cols-1 && board[r][c+1] > 0 {
 		count++
 	}
-	if r < rows-1 && board[r+1][c] > 0 {
+	if r < *rows-1 && board[r+1][c] > 0 {
 		count++
 	}
-	if r < rows-1 && c > 0 && board[r+1][c-1] > 0 {
+	if r < *rows-1 && c > 0 && board[r+1][c-1] > 0 {
 		count++
 	}
-	if r < rows-1 && c < cols-1 && board[r+1][c+1] > 0 {
+	if r < *rows-1 && c < *cols-1 && board[r+1][c+1] > 0 {
 		count++
 	}
 	return count
 }
 
 func life() {
-	var new [rows][cols]int
+	var new [MAX][MAX]int
+	alive = 0
 
-	for row := 0; row < rows; row++ {
-		for col := 0; col < cols; col++ {
+	for row := 0; row < *rows; row++ {
+		for col := 0; col < *cols; col++ {
 			var n = neighbours(row, col)
 			if (n == 2 && board[row][col] > 0) || n == 3 {
 				new[row][col] = board[row][col] + 1
+				alive++
 			}
 		}
 	}
@@ -150,20 +160,48 @@ func life() {
 }
 
 func init_board() {
+
+	board[*rows/2][*cols/2] = 1
+	board[*rows/2+1][*cols/2] = 1
+	board[*rows/2+2][*cols/2] = 1
+	board[*rows/2][*cols/2+1] = 1
+	board[*rows/2+1][*cols/2-1] = 1
+
+	// board[*rows/2][*cols/2] = 1
+	// board[*rows/2][*cols/2+1] = 1
+	// board[*rows/2][*cols/2+2] = 1
+	// board[*rows/2+1][*cols/2+2] = 1
+	// board[*rows/2+1][*cols/2-1] = 1
+	// board[*rows/2+2][*cols/2-2] = 1
+	// board[*rows/2+3][*cols/2-3] = 1
+
+	return
+
 	rand.Seed(42) // want games to be repeatable, this static seed
-	for i := 0; i < initCellCount; i++ {
-		r := rand.Intn(rows)
-		c := rand.Intn(cols)
+	for i := 0; i < *initCellCount; i++ {
+		r := rand.Intn(*rows)
+		c := rand.Intn(*cols)
 		board[r][c] = 1
 	}
 }
 
+func pause() {
+	if *refreshRate > 0 {
+		time.Sleep(time.Second / time.Duration(*refreshRate))
+	} else {
+		fmt.Print("Press Enter to advance to next generation")
+		bufio.NewReader(os.Stdin).ReadBytes('\n')
+	}
+}
+
 func main() {
+	flag.Parse()
+
 	cls()
 	init_board()
 	for {
 		draw()
 		life()
-		time.Sleep(time.Second / time.Duration(refreshRate))
+		pause()
 	}
 }
