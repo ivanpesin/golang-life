@@ -13,7 +13,9 @@ const initCellCount = 250
 const refreshRate = 8
 const rows = 30
 const cols = 80
-const color = true
+
+const ageColor = true
+const ageShape = true
 
 var generation = 0
 
@@ -32,29 +34,40 @@ func pos(r, c int) {
 
 func cell(age int) string {
 
-	if !color {
-		if age > 0 {
-			return "*"
-		} else {
-			return " "
+	if age == 0 {
+		return " "
+	}
+
+	shape := "*"
+	if ageShape {
+		switch age {
+		case 1:
+			shape = "."
+		case 2:
+			shape = "∘"
+		case 3:
+			shape = "∙"
+		default:
+			shape = "*"
 		}
 	}
 
-	switch age {
-	case 0:
-		return " "
-	case 1:
-		return "\033[1;32m*\033[0m"
-	case 2:
-		return "\033[1;36m*\033[0m"
-	case 3:
-		return "\033[1;31m*\033[0m"
-	case 4:
-		return "\033[1;35m*\033[0m"
-	default:
-		return "\033[0;33m*\033[0m"
+	if ageColor {
+		switch age {
+		case 1:
+			return "\033[1;32m" + shape + "\033[0m"
+		case 2:
+			return "\033[1;36m" + shape + "\033[0m"
+		case 3:
+			return "\033[1;31m" + shape + "\033[0m"
+		case 4:
+			return "\033[1;35m" + shape + "\033[0m"
+		default:
+			return "\033[0;33m" + shape + "\033[0m"
+		}
 	}
-	return " \033[0m"
+
+	return shape
 }
 
 func draw() {
