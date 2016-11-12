@@ -12,8 +12,6 @@ import (
 )
 
 // Global settings
-const MAX = 200
-
 var refreshRate = flag.Int("r", 8, "refresh rate per sec")
 var initCellCount = flag.Int("i", 100, "initial number of alive cells")
 
@@ -26,7 +24,7 @@ var cols = flag.Int("cols", 78, "number of columns in universe")
 var generation = 0
 var alive = 0
 
-var board [MAX][MAX]int // value represents age of a cell
+var board [][]int // value represents age of a cell
 
 func cls() {
 	out, _ := exec.Command("tput", "clear").Output()
@@ -37,6 +35,15 @@ func pos(r, c int) {
 	// out, _ := exec.Command("tput", "cup",
 	// 	strconv.Itoa(r), strconv.Itoa(c)).Output()
 	fmt.Printf("\033[" + strconv.Itoa(r) + ";" + strconv.Itoa(c) + "H")
+}
+
+func initSlice(r, c int) [][]int {
+	new := make([][]int, r)
+	for i := 0; i < r; i++ {
+		new[i] = make([]int, c)
+	}
+
+	return new
 }
 
 func cell(age int) string {
@@ -104,7 +111,7 @@ func draw() {
 	fmt.Println("+")
 }
 
-func copyBoard(b [MAX][MAX]int) {
+func copyBoard(b [][]int) {
 	for r := 0; r < *rows; r++ {
 		for c := 0; c < *cols; c++ {
 			board[r][c] = b[r][c]
@@ -142,7 +149,7 @@ func neighbours(r, c int) int {
 }
 
 func life() {
-	var new [MAX][MAX]int
+	new := initSlice(*rows, *cols)
 	alive = 0
 
 	for row := 0; row < *rows; row++ {
@@ -159,13 +166,13 @@ func life() {
 	generation++
 }
 
-func init_board() {
+func initBoard() {
 
-	board[*rows/2][*cols/2] = 1
-	board[*rows/2+1][*cols/2] = 1
-	board[*rows/2+2][*cols/2] = 1
-	board[*rows/2][*cols/2+1] = 1
-	board[*rows/2+1][*cols/2-1] = 1
+	// board[*rows/2][*cols/2] = 1
+	// board[*rows/2+1][*cols/2] = 1
+	// board[*rows/2+2][*cols/2] = 1
+	// board[*rows/2][*cols/2+1] = 1
+	// board[*rows/2+1][*cols/2-1] = 1
 
 	// board[*rows/2][*cols/2] = 1
 	// board[*rows/2][*cols/2+1] = 1
@@ -175,7 +182,7 @@ func init_board() {
 	// board[*rows/2+2][*cols/2-2] = 1
 	// board[*rows/2+3][*cols/2-3] = 1
 
-	return
+	//return
 
 	rand.Seed(42) // want games to be repeatable, this static seed
 	for i := 0; i < *initCellCount; i++ {
@@ -197,8 +204,9 @@ func pause() {
 func main() {
 	flag.Parse()
 
+	board = initSlice(*rows, *cols)
 	cls()
-	init_board()
+	initBoard()
 	for {
 		draw()
 		life()
