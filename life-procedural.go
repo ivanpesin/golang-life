@@ -4,10 +4,12 @@ import (
 	"bufio"
 	"flag"
 	"fmt"
+	"io/ioutil"
 	"math/rand"
 	"os"
 	"os/exec"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -20,6 +22,8 @@ var ageColor = flag.Bool("color", true, "use color to denote cell age")
 
 var rows = flag.Int("rows", 23, "number of rows in universe")
 var cols = flag.Int("cols", 78, "number of columns in universe")
+
+var file = flag.String("f", "", "file to load")
 
 var generation = 0
 var alive = 0
@@ -52,7 +56,7 @@ func cell(age int) string {
 		return " "
 	}
 
-	shape := "*"
+	shape := "*" // █
 	if *ageShape {
 		switch age {
 		case 1:
@@ -166,6 +170,49 @@ func life() {
 	generation++
 }
 
+func loadFile() {
+
+	stRow := *rows/2 - 1
+	stCol := *cols/2 - 1
+
+	data, err := ioutil.ReadFile(*file)
+	if err != nil {
+		panic(err)
+	}
+
+	lines := strings.Split(string(data), "\n")
+
+	r := 0 // current row as we read the shape
+	for _, l := range lines {
+		if len(l) > 1 && l[0] == '#' {
+			if l[1] == 'P' {
+				f := strings.Split(l, " ")
+				atoi, _ := strconv.Atoi(f[1])
+				stCol += atoi
+				atoi, _ = strconv.Atoi(f[2])
+				stRow += atoi
+			}
+			continue
+		}
+
+		for j, c := range l {
+			if c == '*' {
+				if stRow+r < 0 || stRow+r >= *rows {
+					fmt.Println("ERROR: Not enough rows to render the shape")
+					os.Exit(2)
+				}
+				if stCol+j < 0 || stCol+j >= *cols {
+					fmt.Println("ERROR: Not enough cols to render the shape")
+					os.Exit(2)
+				}
+				board[stRow+r][stCol+j] = 1
+			}
+		}
+		r++
+	}
+
+}
+
 func initBoard() {
 
 	// board[*rows/2][*cols/2] = 1
@@ -205,8 +252,13 @@ func main() {
 	flag.Parse()
 
 	board = initSlice(*rows, *cols)
+	if *file == "" {
+		initBoard()
+	} else {
+		loadFile()
+	}
+
 	cls()
-	initBoard()
 	for {
 		draw()
 		life()
