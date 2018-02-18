@@ -3,6 +3,9 @@ package main
 import (
 	"flag"
 	"fmt"
+	"image"
+	"image/color"
+	"image/gif"
 	"io/ioutil"
 	"log"
 	"os"
@@ -11,6 +14,11 @@ import (
 	"strings"
 	"time"
 )
+
+// GIF parameters
+var palette = []color.Color{color.White, color.Black}
+var gifSize = 8
+var gifPadding = 2
 
 // CLI parameters
 var file = flag.String("f", "", "LIF 1.05/1.06 file")
@@ -23,8 +31,9 @@ var ncols = flag.Int("cols", 78, "number of cols (default: 78)")
 var turns = flag.Int("turns", 0, "number of generations to simulate")
 var rate = flag.Int("r", 2, "Rate of generations per second (default: 2)")
 
-var ageColor = flag.Bool("color", true, "use color to show cell age (default: true)")
-var ageShape = flag.Bool("shape", true, "use shapes to show cell age (default: true)")
+var ageColor = flag.Bool("color", false, "use color to show cell age (default: false)")
+var ageShape = flag.Bool("shape", false, "use shapes to show cell age (default: false)")
+var genGIF = flag.Bool("gif", false, "generate GIF file with evolution (default: false)")
 
 // end of CLI parameters
 
@@ -64,7 +73,7 @@ func NewLife(r, c int) *universe {
 	u.prev = newBoard(r, c)
 
 	u.alive = 0
-	u.gen = 0
+	u.gen = 1
 
 	return u
 }
@@ -87,7 +96,8 @@ func cellShape(age int) string {
 	}
 
 	shape := "*" // "▣"
-	if *ageShape {
+	// can't use string slice and index, because of UTF chars
+	if *ageShape && age < 4 {
 		switch age {
 		case 1:
 			shape = "."
@@ -95,8 +105,6 @@ func cellShape(age int) string {
 			shape = "∘"
 		case 3:
 			shape = "∙"
-		default:
-			shape = "*"
 		}
 	}
 
@@ -118,6 +126,39 @@ func cellShape(age int) string {
 	return shape
 }
 
+func drawCell(img *image.Paletted, r, c int) {
+	for y := 0; y < gifSize; y++ {
+		for x := 0; x < gifSize; x++ {
+			img.SetColorIndex(c*(gifSize+gifPadding)+x, r*(gifSize+gifPadding)+y, 1)
+		}
+	}
+}
+
+func (u *universe) image() *image.Paletted {
+
+	rect := image.Rect(0, 0, u.cols*(gifSize+gifPadding), u.rows*(gifSize+gifPadding))
+	img := image.NewPaletted(rect, palette)
+
+	for i := 0; i < u.cols*(gifSize+gifPadding); i++ {
+		img.SetColorIndex(i, 0, 1)
+		img.SetColorIndex(i, u.rows*(gifSize+gifPadding)-1, 1)
+	}
+	for i := 0; i < u.rows*(gifSize+gifPadding); i++ {
+		img.SetColorIndex(0, i, 1)
+		img.SetColorIndex(u.cols*(gifSize+gifPadding)-1, i, 1)
+	}
+
+	for r := 0; r < u.rows; r++ {
+		for c := 0; c < u.cols; c++ {
+			if u.board[r][c] > 0 {
+				drawCell(img, r, c)
+			}
+		}
+	}
+
+	return img
+}
+
 func (u *universe) draw() {
 	pos(0, 0)
 
@@ -126,7 +167,7 @@ func (u *universe) draw() {
 		*rate, u.alive, u.gen)
 
 	// to speed up we're going to update the frame only every 100 generation
-	redrawFrame := u.gen%100 == 0
+	redrawFrame := u.gen%100 == 1
 	if redrawFrame {
 		fmt.Println()
 		fmt.Print("+")
@@ -381,10 +422,23 @@ func main() {
 
 	flag.Parse()
 
-	cls()
+	anim := gif.GIF{LoopCount: *turns}
+	var outgif *os.File
+	outgifName := "./life.gif"
+	if *genGIF {
+		if *turns == 0 {
+			log.Fatal("option -gif requires number of generations to simulate (-turns)")
+		}
+		var err error
+		outgif, err = os.Create(outgifName)
+		if err != nil {
+			log.Fatalf("failed to create file: %v", err)
+		}
+	} else {
+		cls()
+	}
 
 	life := NewLife(*nrows, *ncols)
-
 	if *file == "" {
 		life.rPentomino()
 	} else {
@@ -392,12 +446,30 @@ func main() {
 	}
 
 	for {
-		life.draw()
-		life.evolve()
-		if *turns > 0 && life.gen >= *turns {
-			fmt.Printf("\nReached generation %v\n", life.gen)
-			break
+		if *genGIF {
+			anim.Image = append(anim.Image, life.image())
+			if *turns > 0 && life.gen >= *turns {
+				anim.Delay = append(anim.Delay, 300 + 100 / *rate)
+				fmt.Printf("\nReached generation %v\n", life.gen)
+				break
+			} else {
+				anim.Delay = append(anim.Delay, 100 / *rate)
+			}
+			life.evolve()
+		} else {
+			life.draw()
+			if *turns > 0 && life.gen >= *turns {
+				fmt.Printf("\nReached generation %v\n", life.gen)
+				break
+			}
+			life.evolve()
+			time.Sleep(time.Second / time.Duration(*rate))
 		}
-		time.Sleep(time.Second / time.Duration(*rate))
+	}
+
+	if *genGIF {
+		fmt.Printf("Generating GIF ... ")
+		gif.EncodeAll(outgif, &anim)
+		fmt.Printf("done.\n[%v]\n", outgifName)
 	}
 }
