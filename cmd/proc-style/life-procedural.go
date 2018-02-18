@@ -56,7 +56,7 @@ func cell(age int) string {
 		return " "
 	}
 
-	shape := "*" // █
+	shape := "*" // "▣"
 	if *ageShape {
 		switch age {
 		case 1:
