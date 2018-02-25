@@ -13,27 +13,30 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"golang.org/x/image/font"
+	"golang.org/x/image/font/basicfont"
+	"golang.org/x/image/math/fixed"
 )
 
 // GIF parameters
 var palette = []color.Color{color.White, color.Black}
-var gifSize = 8
-var gifPadding = 2
+var gifCellSize = 8
+var gifCellPadding = 2
 
-// CLI parameters
-var file = flag.String("f", "", "LIF 1.05/1.06 file")
-var deltaXflag = flag.Int("deltax", 0, "X translation for loaded shape (default: auto)")
-var deltaYflag = flag.Int("deltay", 0, "Y translation for loaded shape (default: auto)")
-
-var nrows = flag.Int("rows", 22, "number of rows (default: 22)")
-var ncols = flag.Int("cols", 78, "number of cols (default: 78)")
-
-var turns = flag.Int("turns", 0, "number of generations to simulate")
-var rate = flag.Int("r", 2, "Rate of generations per second (default: 2)")
-
-var ageColor = flag.Bool("color", false, "use color to show cell age (default: false)")
-var ageShape = flag.Bool("shape", false, "use shapes to show cell age (default: false)")
-var genGIF = flag.Bool("gif", false, "generate GIF file with evolution (default: false)")
+// Config struct holds CLI parameters values
+var Config struct {
+	file       string
+	deltaXflag int
+	deltaYflag int
+	nrows      int
+	ncols      int
+	turns      int
+	rate       int
+	ageColor   bool
+	ageShape   bool
+	genGIF     string
+}
 
 // end of CLI parameters
 
@@ -45,7 +48,8 @@ func pos(r, c int) {
 	fmt.Printf("\033[" + strconv.Itoa(r) + ";" + strconv.Itoa(c) + "H")
 }
 
-type universe struct {
+// Universe struct
+type Universe struct {
 	rows, cols int
 	prev       [][]int // previous generation of universe
 	board      [][]int // value represents age of a cell
@@ -62,9 +66,9 @@ func newBoard(r, c int) [][]int {
 }
 
 // NewLife returns new initialised universe
-func NewLife(r, c int) *universe {
+func NewLife(r, c int) *Universe {
 
-	u := &universe{}
+	u := &Universe{}
 
 	u.rows = r
 	u.cols = c
@@ -78,7 +82,7 @@ func NewLife(r, c int) *universe {
 	return u
 }
 
-func (u *universe) rPentomino() {
+func (u *Universe) rPentomino() {
 	// create r-pentomino pattern
 	u.board[u.rows/2][u.cols/2] = 1
 	u.board[u.rows/2+1][u.cols/2] = 1
@@ -97,7 +101,7 @@ func cellShape(age int) string {
 
 	shape := "*" // "▣"
 	// can't use string slice and index, because of UTF chars
-	if *ageShape && age < 4 {
+	if Config.ageShape && age < 4 {
 		switch age {
 		case 1:
 			shape = "."
@@ -108,7 +112,7 @@ func cellShape(age int) string {
 		}
 	}
 
-	if *ageColor {
+	if Config.ageColor {
 		switch age {
 		case 1:
 			return "\033[1;32m" + shape + "\033[0m"
@@ -126,26 +130,44 @@ func cellShape(age int) string {
 	return shape
 }
 
+// paints cell at specified (row, column) location
 func drawCell(img *image.Paletted, r, c int) {
-	for y := 0; y < gifSize; y++ {
-		for x := 0; x < gifSize; x++ {
-			img.SetColorIndex(c*(gifSize+gifPadding)+x, r*(gifSize+gifPadding)+y, 1)
+	for y := 0; y < gifCellSize; y++ {
+		for x := 0; x < gifCellSize; x++ {
+			img.SetColorIndex(c*(gifCellSize+gifCellPadding)+x, r*(gifCellSize+gifCellPadding)+y, 1)
 		}
 	}
 }
 
-func (u *universe) image() *image.Paletted {
+func addLabel(img *image.Paletted, x, y int, label string) {
 
-	rect := image.Rect(0, 0, u.cols*(gifSize+gifPadding), u.rows*(gifSize+gifPadding))
+	point := fixed.Point26_6{
+		X: fixed.Int26_6(x * 64),
+		Y: fixed.Int26_6(y * 64),
+	}
+
+	d := &font.Drawer{
+		Dst: img,
+		Src: image.NewUniform(palette[1]),
+		//Face: inconsolata.Regular8x16,
+		Face: basicfont.Face7x13,
+		Dot:  point,
+	}
+	d.DrawString(label)
+}
+
+// return gif image of current generation
+func (u *Universe) image() *image.Paletted {
+	rect := image.Rect(0, 0, u.cols*(gifCellSize+gifCellPadding), u.rows*(gifCellSize+gifCellPadding))
 	img := image.NewPaletted(rect, palette)
 
-	for i := 0; i < u.cols*(gifSize+gifPadding); i++ {
+	for i := 0; i < u.cols*(gifCellSize+gifCellPadding); i++ {
 		img.SetColorIndex(i, 0, 1)
-		img.SetColorIndex(i, u.rows*(gifSize+gifPadding)-1, 1)
+		img.SetColorIndex(i, u.rows*(gifCellSize+gifCellPadding)-1, 1)
 	}
-	for i := 0; i < u.rows*(gifSize+gifPadding); i++ {
+	for i := 0; i < u.rows*(gifCellSize+gifCellPadding); i++ {
 		img.SetColorIndex(0, i, 1)
-		img.SetColorIndex(u.cols*(gifSize+gifPadding)-1, i, 1)
+		img.SetColorIndex(u.cols*(gifCellSize+gifCellPadding)-1, i, 1)
 	}
 
 	for r := 0; r < u.rows; r++ {
@@ -156,15 +178,19 @@ func (u *universe) image() *image.Paletted {
 		}
 	}
 
+	l := fmt.Sprintf("Conway's Life in Go | board %dx%d;", u.rows, u.cols)
+	l = l + fmt.Sprintf(" rate %d/sec; alive = %3d; gen = %d/%d", Config.rate, u.alive, u.gen, Config.turns)
+	addLabel(img, 10, 20, l)
+
 	return img
 }
 
-func (u *universe) draw() {
+func (u *Universe) draw() {
 	pos(0, 0)
 
 	fmt.Printf("Conway's Life in Go | board %dx%d;", u.rows, u.cols)
 	fmt.Printf(" rate %d/sec; alive = %3d; gen = %d\033[K",
-		*rate, u.alive, u.gen)
+		Config.rate, u.alive, u.gen)
 
 	// to speed up we're going to update the frame only every 100 generation
 	redrawFrame := u.gen%100 == 1
@@ -203,7 +229,8 @@ func (u *universe) draw() {
 	pos(u.rows+3, 0)
 }
 
-func (u *universe) neighbours(r, c int) (count int) {
+// returns number of alive cells surrounding the given one
+func (u *Universe) neighbours(r, c int) (count int) {
 	if r > 0 && c > 0 && u.prev[r-1][c-1] > 0 {
 		count++
 	}
@@ -234,7 +261,8 @@ func (u *universe) neighbours(r, c int) (count int) {
 	return
 }
 
-func (u *universe) evolve() {
+// evolves the universe 1 step according to standard B3/S23
+func (u *Universe) evolve() {
 	u.prev = u.board
 
 	u.board = newBoard(u.rows, u.cols)
@@ -253,7 +281,8 @@ func (u *universe) evolve() {
 	u.gen++
 }
 
-func (u *universe) loadShape105(lines []string) {
+// shape loading from LIF 1.05
+func (u *Universe) loadShape105(lines []string) {
 	startX := u.cols/2 - 1
 	startY := u.rows/2 - 1
 
@@ -295,7 +324,8 @@ func (u *universe) loadShape105(lines []string) {
 
 }
 
-func (u *universe) loadShape106(lines []string) {
+// shape loading from LIF 1.06
+func (u *Universe) loadShape106(lines []string) {
 	centerX := u.cols/2 - 1
 	centerY := u.rows/2 - 1
 
@@ -324,7 +354,9 @@ func (u *universe) loadShape106(lines []string) {
 	}
 }
 
-func (u *universe) boundries() (startX, startY, endX, endY int) {
+// function returns top left and bottom right coords of a rectangle
+// that enframes the shape. Used to translate the shape to new position.
+func (u *Universe) boundries() (startX, startY, endX, endY int) {
 	startX, endX, startY, endY = u.cols, 0, u.rows, 0
 
 	// calculate shape boundries
@@ -350,12 +382,13 @@ func (u *universe) boundries() (startX, startY, endX, endY int) {
 	return
 }
 
-func (u *universe) translate() {
-
+// translate moves the shape to a new position.
+// if no CLI parameters specified, the shape is centered
+func (u *Universe) translate() {
 	startX, startY, endX, endY := u.boundries()
 
-	deltaX := *deltaXflag
-	deltaY := *deltaYflag
+	deltaX := Config.deltaXflag
+	deltaY := Config.deltaYflag
 
 	if deltaX == 0 && deltaY == 0 {
 		// recenter the shape
@@ -388,8 +421,8 @@ func (u *universe) translate() {
 
 }
 
-func (u *universe) loadFrom(fn string) {
-
+// load shape from a file
+func (u *Universe) loadFrom(fn string) {
 	data, err := ioutil.ReadFile(fn)
 	if err != nil {
 		panic(err)
@@ -415,22 +448,40 @@ func (u *universe) loadFrom(fn string) {
 	}
 
 	u.translate()
-
 }
 
+// CLI parameters parsing
+func init() {
+	flag.StringVar(&Config.file, "f", "", "Load life pattern from LIF 1.05/1.06 file")
+
+	flag.IntVar(&Config.deltaXflag, "deltax", 0, "X translation for loaded shape (default: auto)")
+	flag.IntVar(&Config.deltaYflag, "deltay", 0, "Y translation for loaded shape (default: auto)")
+
+	flag.IntVar(&Config.nrows, "rows", 22, "number of rows")
+	flag.IntVar(&Config.ncols, "cols", 78, "number of cols")
+
+	flag.IntVar(&Config.turns, "turns", 0, "number of generations to simulate")
+	flag.IntVar(&Config.rate, "r", 2, "Rate of generations per second")
+
+	flag.BoolVar(&Config.ageColor, "color", false, "use color to show cell age")
+	flag.BoolVar(&Config.ageShape, "shape", false, "use shapes to show cell age")
+
+	flag.StringVar(&Config.genGIF, "gif", "", "generate GIF file with evolution")
+}
+
+// main cycle
 func main() {
 
 	flag.Parse()
 
-	anim := gif.GIF{LoopCount: *turns}
+	anim := gif.GIF{LoopCount: Config.turns}
 	var outgif *os.File
-	outgifName := "./life.gif"
-	if *genGIF {
-		if *turns == 0 {
+	if Config.genGIF != "" {
+		if Config.turns == 0 {
 			log.Fatal("option -gif requires number of generations to simulate (-turns)")
 		}
 		var err error
-		outgif, err = os.Create(outgifName)
+		outgif, err = os.Create(Config.genGIF)
 		if err != nil {
 			log.Fatalf("failed to create file: %v", err)
 		}
@@ -438,38 +489,38 @@ func main() {
 		cls()
 	}
 
-	life := NewLife(*nrows, *ncols)
-	if *file == "" {
+	life := NewLife(Config.nrows, Config.ncols)
+	if Config.file == "" {
 		life.rPentomino()
 	} else {
-		life.loadFrom(*file)
+		life.loadFrom(Config.file)
 	}
 
 	for {
-		if *genGIF {
+		if Config.genGIF != "" {
 			anim.Image = append(anim.Image, life.image())
-			if *turns > 0 && life.gen >= *turns {
-				anim.Delay = append(anim.Delay, 300 + 100 / *rate)
+			if Config.turns > 0 && life.gen >= Config.turns {
+				anim.Delay = append(anim.Delay, 300+100/Config.rate)
 				fmt.Printf("\nReached generation %v\n", life.gen)
 				break
 			} else {
-				anim.Delay = append(anim.Delay, 100 / *rate)
+				anim.Delay = append(anim.Delay, 100/Config.rate)
 			}
 			life.evolve()
 		} else {
 			life.draw()
-			if *turns > 0 && life.gen >= *turns {
+			if Config.turns > 0 && life.gen >= Config.turns {
 				fmt.Printf("\nReached generation %v\n", life.gen)
 				break
 			}
 			life.evolve()
-			time.Sleep(time.Second / time.Duration(*rate))
+			time.Sleep(time.Second / time.Duration(Config.rate))
 		}
 	}
 
-	if *genGIF {
+	if Config.genGIF != "" {
 		fmt.Printf("Generating GIF ... ")
 		gif.EncodeAll(outgif, &anim)
-		fmt.Printf("done.\n[%v]\n", outgifName)
+		fmt.Printf("done.\n[%v]\n", Config.genGIF)
 	}
 }
