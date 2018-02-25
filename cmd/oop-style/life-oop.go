@@ -454,19 +454,24 @@ func (u *Universe) loadFrom(fn string) {
 func init() {
 	flag.StringVar(&Config.file, "f", "", "Load life pattern from LIF 1.05/1.06 file")
 
-	flag.IntVar(&Config.deltaXflag, "deltax", 0, "X translation for loaded shape (default: auto)")
-	flag.IntVar(&Config.deltaYflag, "deltay", 0, "Y translation for loaded shape (default: auto)")
+	flag.IntVar(&Config.deltaXflag, "deltax", 0, "X translation for loaded shape (centered by default)")
+	flag.IntVar(&Config.deltaYflag, "deltay", 0, "Y translation for loaded shape (centered by default)")
 
-	flag.IntVar(&Config.nrows, "rows", 22, "number of rows")
-	flag.IntVar(&Config.ncols, "cols", 78, "number of cols")
+	flag.IntVar(&Config.nrows, "rows", 22, "Number of rows")
+	flag.IntVar(&Config.ncols, "cols", 78, "Number of cols")
 
-	flag.IntVar(&Config.turns, "turns", 0, "number of generations to simulate")
+	flag.IntVar(&Config.turns, "turns", 0, "Number of generations to simulate")
 	flag.IntVar(&Config.rate, "r", 2, "Rate of generations per second")
 
-	flag.BoolVar(&Config.ageColor, "color", false, "use color to show cell age")
-	flag.BoolVar(&Config.ageShape, "shape", false, "use shapes to show cell age")
+	flag.BoolVar(&Config.ageColor, "color", false, "In text-mode use color to show cell age")
+	flag.BoolVar(&Config.ageShape, "shape", false, "In text-mode use shapes to show cell age")
 
-	flag.StringVar(&Config.genGIF, "gif", "", "generate GIF file with evolution")
+	flag.StringVar(&Config.genGIF, "gif", "", "Instead of text-mode, generate animated GIF file with\nspecified name containing the evolution.")
+
+	flag.Usage = func() {
+		fmt.Printf("Conway's Life simulator in Go:\n  Text-mode or animated gif simulation according to B2/S23 rules.\n\nUsage:\n")
+		flag.PrintDefaults()
+	}
 }
 
 // main cycle
