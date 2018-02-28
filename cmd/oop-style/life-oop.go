@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"flag"
 	"fmt"
 	"image"
@@ -474,6 +475,15 @@ func init() {
 	}
 }
 
+func delay() {
+	if Config.rate == 0 {
+		fmt.Printf("\nPress ENTER for next generation ...")
+		bufio.NewReader(os.Stdin).ReadBytes('\n')
+	} else {
+		time.Sleep(time.Second / time.Duration(Config.rate))
+	}
+}
+
 // main cycle
 func main() {
 
@@ -489,6 +499,9 @@ func main() {
 		outgif, err = os.Create(Config.genGIF)
 		if err != nil {
 			log.Fatalf("failed to create file: %v", err)
+		}
+		if Config.rate < 1 {
+			log.Fatalf("Invalid rate, provide number greater than 0")
 		}
 	} else {
 		cls()
@@ -519,7 +532,7 @@ func main() {
 				break
 			}
 			life.evolve()
-			time.Sleep(time.Second / time.Duration(Config.rate))
+			delay()
 		}
 	}
 
